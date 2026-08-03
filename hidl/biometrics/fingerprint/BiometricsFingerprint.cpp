@@ -188,6 +188,9 @@ Return<RequestStatus> BiometricsFingerprint::postEnroll() {
         ALOGE("No valid device");
         return RequestStatus::SYS_UNKNOWN;
     }
+#ifdef LGE_EGISTEC_UDFPS
+    BiometricsFingerprint::onFingerUp();
+#endif // LGE_EGISTEC_UDFPS
     return ErrorFilter(mDevice->post_enroll(mDevice));
 }
 
@@ -317,6 +320,16 @@ fingerprint_device_t* BiometricsFingerprint::openHal() {
 void BiometricsFingerprint::notify(const fingerprint_msg_t *msg) {
     BiometricsFingerprint* thisPtr = static_cast<BiometricsFingerprint*>(
             BiometricsFingerprint::getInstance());
+#ifdef LGE_EGISTEC_UDFPS
+    // The framework tears the enrollment client down as soon as it receives
+    // the final result, so a later pointer-up is not guaranteed to reach us.
+    // Turn illumination off before forwarding terminal callbacks.
+    if (msg->type == FINGERPRINT_ERROR ||
+            (msg->type == FINGERPRINT_TEMPLATE_ENROLLING &&
+             msg->data.enroll.samples_remaining == 0)) {
+        thisPtr->onFingerUp();
+    }
+#endif // LGE_EGISTEC_UDFPS
     std::lock_guard<std::mutex> lock(thisPtr->mClientCallbackMutex);
     if (thisPtr == nullptr || thisPtr->mClientCallback == nullptr) {
         ALOGE("Receiving callbacks before the client callback is registered.");
@@ -428,12 +441,12 @@ void BiometricsFingerprint::disableHighBrightFod() {
     if (!hbmFodEnabled)
         return;
 
+    setFodHbm(false);
+    hbmFodEnabled = false;
+
     mDevice->do_extra_api_in(FINGERPRINT_LGE_SCAN_STOP, &param);
 
-    setFodHbm(false);
     resetLgeTouchPanel();
-
-    hbmFodEnabled = false;
 }
 
 void BiometricsFingerprint::enableHighBrightFod() {
