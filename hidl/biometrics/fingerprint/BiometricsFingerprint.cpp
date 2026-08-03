@@ -197,6 +197,9 @@ Return<RequestStatus> BiometricsFingerprint::postEnroll() {
         ALOGE("No valid device");
         return RequestStatus::SYS_UNKNOWN;
     }
+#ifdef LGE_EGISTEC_UDFPS
+    BiometricsFingerprint::onFingerUp();
+#endif // LGE_EGISTEC_UDFPS
     return ErrorFilter(mDevice->post_enroll(mDevice));
 }
 
@@ -321,6 +324,13 @@ fingerprint_device_t* BiometricsFingerprint::openHal() {
 void BiometricsFingerprint::notify(const fingerprint_msg_t* msg) {
     BiometricsFingerprint* thisPtr =
             static_cast<BiometricsFingerprint*>(BiometricsFingerprint::getInstance());
+#ifdef LGE_EGISTEC_UDFPS
+    if (msg->type == FINGERPRINT_ERROR ||
+            (msg->type == FINGERPRINT_TEMPLATE_ENROLLING &&
+             msg->data.enroll.samples_remaining == 0)) {
+        thisPtr->onFingerUp();
+    }
+#endif
     std::lock_guard<std::mutex> lock(thisPtr->mClientCallbackMutex);
     if (thisPtr == nullptr || thisPtr->mClientCallback == nullptr) {
         ALOGE("Receiving callbacks before the client callback is registered.");
@@ -390,6 +400,9 @@ void BiometricsFingerprint::notify(const fingerprint_msg_t* msg) {
                     ALOGE("failed to invoke fingerprint onAuthenticated callback");
                 }
             }
+#ifdef LGE_EGISTEC_UDFPS
+            thisPtr->onFingerUp();
+#endif  // LGE_EGISTEC_UDFPS
             break;
         case FINGERPRINT_TEMPLATE_ENUMERATING:
             ALOGD("onEnumerate(fid=%d, gid=%d, rem=%d)", msg->data.enumerated.finger.fid,
@@ -423,14 +436,16 @@ void BiometricsFingerprint::disableHighBrightFod() {
     std::lock_guard<std::mutex> lock(mSetHbmFodMutex);
     uint32_t param = 0;
 
-    if (!hbmFodEnabled) return;
+    const bool wasEnabled = hbmFodEnabled;
+    hbmFodEnabled = false;
+    setFodHbm(false);
 
-    mDevice->do_extra_api_in(FINGERPRINT_LGE_SCAN_STOP, &param);
+    if (wasEnabled) {
+        mDevice->do_extra_api_in(FINGERPRINT_LGE_SCAN_STOP, &param);
+    }
 
     setFodHbm(false);
     resetLgeTouchPanel();
-
-    hbmFodEnabled = false;
 }
 
 void BiometricsFingerprint::enableHighBrightFod() {
