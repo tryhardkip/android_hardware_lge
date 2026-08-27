@@ -13,9 +13,23 @@
 
 #include <fcntl.h>
 #include <linux/tspdrv.h>
+#include <unistd.h>
+#include <cstring>
 #include <vector>
 
 using aidl::android::hardware::vibrator::Vibrator;
+
+static bool isDw7914(int fileDescriptor) {
+    if (access("/sys/bus/i2c/drivers/dw7914", F_OK) == 0) {
+        return true;
+    }
+
+    // DW7912/14 expose the same buffered ABI. This also provides a fallback when
+    // production SELinux policy hides the driver's sysfs directory.
+    char driverInfo[VIBE_MAX_DEVICE_NAME_LENGTH] = {};
+    return pread(fileDescriptor, driverInfo, sizeof(driverInfo) - 1, 0) > 0 &&
+           strstr(driverInfo, " v5.4.2.0\n") != nullptr;
+}
 
 int registerVibratorService(std::vector<int>& initializeArgs) {
     // Open device file as read/write for ioctl and write
@@ -110,7 +124,8 @@ int main() {
     int ret = registerVibratorService(args);
     if (ret != 0) return EXIT_FAILURE;
 
-    std::shared_ptr<Vibrator> vibrator = ndk::SharedRefBase::make<Vibrator>(args.at(0), args.at(1));
+    std::shared_ptr<Vibrator> vibrator =
+            ndk::SharedRefBase::make<Vibrator>(args.at(0), args.at(1), isDw7914(args.at(0)));
     const std::string vibName = std::string() + Vibrator::descriptor + "/default";
     binder_status_t status =
             AServiceManager_addService(vibrator->asBinder().get(), vibName.c_str());

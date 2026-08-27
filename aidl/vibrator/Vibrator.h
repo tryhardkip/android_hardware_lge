@@ -16,7 +16,7 @@ namespace vibrator {
 
 class Vibrator : public BnVibrator {
   public:
-    Vibrator(int32_t file_desc, int32_t numActuators);
+    Vibrator(int32_t file_desc, int32_t numActuators, bool isDw7914);
     ndk::ScopedAStatus getCapabilities(int32_t* _aidl_return) override;
     ndk::ScopedAStatus off() override;
     ndk::ScopedAStatus on(int32_t timeoutMs,
@@ -53,10 +53,17 @@ class Vibrator : public BnVibrator {
     int32_t mNumActuators;
 
     uint8_t mCurrentAmplitude;
+    uint8_t mDefaultAmplitude;
 
     int32_t mClickDuration;
     int32_t mTickDuration;
     int32_t mHeavyClickDuration;
+
+    int32_t mOutputBufferSize;
+    int32_t mPrebufferCount;
+    double mSamplesPerMs;
+    double mSamplesPerRadian;
+    float mAmplitudeGain;
 };
 
 }  // namespace vibrator
