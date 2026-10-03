@@ -8,6 +8,9 @@
 
 namespace vendor::lge::hardware::radio::implementation {
 
+using ::android::hardware::radio::V1_0::GsmSignalStrength;
+using ::android::hardware::radio::V1_4::SignalStrength;
+
 LgeRadioResponseV2::LgeRadioResponseV2(const sp<IRadioResponse>& radioResponse) {
     mRadioResponse = radioResponse;
 }
@@ -259,7 +262,19 @@ Return<void> LgeRadioResponseV2::getIMSNetworkInfoResponse(const RadioResponseIn
 
 Return<void> LgeRadioResponseV2::lgeGetSignalStrengthResponse(
         const RadioResponseInfo& info, const LgeSignalStrength& signalStrength) {
-    return Void();
+    GsmSignalStrength gsm = {.signalStrength = signalStrength.gw.signalStrength,
+                             .bitErrorRate = signalStrength.gw.bitErrorRate,
+                             .timingAdvance = signalStrength.gw.timingAdvance};
+
+    SignalStrength standard = {.gsm = gsm,
+                               .cdma = signalStrength.cdma,
+                               .evdo = signalStrength.evdo,
+                               .lte = signalStrength.lte,
+                               .tdscdma = signalStrength.tdScdma,
+                               .wcdma = signalStrength.wcdma,
+                               .nr = signalStrength.nr};
+
+    return mRadioResponse->getSignalStrengthResponse_1_4(info, standard);
 }
 
 Return<void> LgeRadioResponseV2::lgeGetCurrentCallsResponse(const RadioResponseInfo& info,
